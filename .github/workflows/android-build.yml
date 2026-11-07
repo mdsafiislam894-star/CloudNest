@@ -10,37 +10,140 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Extract zip archive
-      run: |
-        unzip -o CloudNest-source.zip
-        echo "Extracted files:"
-        ls -la
+      - name: Extract zip archive to root
+        run: |
+          python3 -c "
+          import zipfile, os, shutil
+          if os.path.exists('CloudNest-source.zip'):
+              with zipfile.ZipFile('CloudNest-source.zip', 'r') as z:
+                  z.extractall('temp_ext')
+              items = [i for i in os.listdir('temp_ext') if not i.startswith('.')]
+              src = os.path.join('temp_ext', items[0]) if len(items) == 1 and os.path.isdir(os.path.join('temp_ext', items[0])) else 'temp_ext'
+              for item in os.listdir(src):
+                  s, d = os.path.join(src, item), os.path.join('.', item)
+                  if os.path.isdir(s):
+                      if os.path.exists(d): shutil.rmtree(d)
+                      shutil.copytree(s, d)
+                  else:
+                      shutil.copy2(s, d)
+              shutil.rmtree('temp_ext')
+              print('Extracted zip directly to project root.')
+          "
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Apply required code fixes
+        run: |
+          python3 -c "
+          import os
 
-    - name: Patch project code
-      run: |
-        echo "aW1wb3J0IG9zLCBnbG9iLCByZQpmb3IgcCBpbiBnbG9iLmdsb2IoIioqL0F1dGhTY3JlZW4ua3QiLCByZWN1cnNpdmU9VHJ1ZSk6CiAgICB3aXRoIG9wZW4ocCwgInIiKSBhcyBmcDogYyA9IGZwLnJlYWQoKQogICAgYyArPSAiXG5AYW5kcm9pZHguY29tcG9zZS5ydW50aW1lLkNvbXBvc2FibGVcbmZ1biBDbG91ZE5lc3RNYXJrKG1vZGlmaWVyOiBhbmRyb2lkeC5jb21wb3NlLnVpLk1vZGlmaWVyID0gYW5kcm9pZHguY29tcG9zZS51aS5Nb2RpZmllcikge31cbiIKICAgIHdpdGggb3BlbihwLCAidyIpIGFzIGZwOiBmcC53cml0ZShjKQpmb3IgcCBpbiBnbG9iLmdsb2IoIioqL0FwcE5hdkhvc3Qua3QiLCByZWN1cnNpdmU9VHJ1ZSk6CiAgICB3aXRoIG9wZW4ocCwgInIiKSBhcyBmcDogYyA9IGZwLnJlYWQoKQogICAgbGluZXMgPSBbbCBmb3IgbCBpbiBjLnNwbGl0bGluZXMoKSBpZiAib25PcGVuQ2xvdWQgPSIgbm90IGluIGxdCiAgICBjID0gIlxuIi5qb2luKGxpbmVzKQogICAgYyA9IHJlLnN1YihyIm9uT3BlbkNsb3VkXHMqOlxzKlwoXHMqXHMqKVxzKi0+XHMqVW5pdCIsICJvbk9wZW5DbG91ZDogKCkgLT4gVW5pdCA9IHt9IiwgYykKICAgIHdpdGggb3BlbihwLCAidyIpIGFzIGZwOiBmcC53cml0ZShjKQo=" | base64 -d > patch.py
-        python3 patch.py
+          # 1. Create CloudNestMark.kt
+          mark_dir = 'ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/components'
+          os.makedirs(mark_dir, exist_ok=True)
+          mark_path = os.path.join(mark_dir, 'CloudNestMark.kt')
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+          imports = set()
+          for root, dirs, files in os.walk('ui'):
+              for file in files:
+                  if file.endswith('.kt'):
+                      with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
+                          for line in f:
+                              if 'generated.resources' in line and line.strip().startswith('import'):
+                                  imports.add(line.strip())
 
-    - name: Make gradlew executable
-      run: chmod +x gradlew
+          if not imports:
+              imports.add('import cloudnest.ui.generated.resources.Res')
+              imports.add('import cloudnest.ui.generated.resources.cloudnest_logo')
 
-    - name: Build Android App
-      run: ./gradlew assembleDebug
+          import_text = '\n'.join(sorted(list(imports)))
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug.apk
-        path: '**/build/outputs/apk/debug/*.apk'
+          mark_code = f'''package com.safiislam.nexvault.presentation.components
+
+          import androidx.compose.foundation.Image
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Modifier
+          import org.jetbrains.compose.resources.painterResource
+          {import_text}
+
+          @Composable
+          fun CloudNestMark(
+              modifier: Modifier = Modifier
+          ) {{
+              Image(
+                  painter = painterResource(Res.drawable.cloudnest_logo),
+                  contentDescription = \"CloudNest Logo\",
+                  modifier = modifier
+              )
+          }}
+          '''
+
+          with open(mark_path, 'w', encoding='utf-8') as f:
+              f.write(mark_code)
+          print('Created CloudNestMark.kt')
+
+          # 2. Update AppNavHost.kt
+          nav_path = 'ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt'
+          if os.path.exists(nav_path):
+              with open(nav_path, 'r', encoding='utf-8') as f:
+                  lines = f.readlines()
+
+              new_lines = []
+              i = 0
+              while i < len(lines):
+                  line = lines[i]
+                  if 'OnboardingScreen' in line:
+                      block = [line]
+                      paren_count = line.count('(') - line.count(')')
+                      i += 1
+                      while i < len(lines) and paren_count > 0:
+                          l = lines[i]
+                          paren_count += l.count('(') - l.count(')')
+                          block.append(l)
+                          i += 1
+                      cleaned_block = [l for l in block if 'onOpenCloud' not in l]
+                      new_lines.extend(cleaned_block)
+                      continue
+                  elif 'SettingsSectionScreen' in line:
+                      block = [line]
+                      paren_count = line.count('(') - line.count(')')
+                      i += 1
+                      while i < len(lines) and paren_count > 0:
+                          l = lines[i]
+                          paren_count += l.count('(') - l.count(')')
+                          block.append(l)
+                          i += 1
+                      block_str = ''.join(block)
+                      if 'onOpenCloud' not in block_str:
+                          indent = ' ' * 12
+                          param_line = f'{indent}onOpenCloud = {{ navController.navigateOnce(Route.CloudAccount) }},\n'
+                          block.insert(-1, param_line)
+                      new_lines.extend(block)
+                      continue
+                  else:
+                      new_lines.append(line)
+                      i += 1
+
+              with open(nav_path, 'w', encoding='utf-8') as f:
+                  f.writelines(new_lines)
+              print('Updated AppNavHost.kt')
+          "
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build Android App
+        run: ./gradlew :android:assembleDebug -PsplitAbis=false
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: '**/*.apk'
+  build:
