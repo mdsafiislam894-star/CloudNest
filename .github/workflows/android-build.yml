@@ -27,61 +27,50 @@ jobs:
 
     - name: Patch project code
       run: |
-        python3 -c "
-        import os, glob, re
+        cat << 'EOF' > patch.py
+import os, glob, re
 
-        print('=== EXAMINING KOTLIN FILES ===')
-        for root, dirs, files in os.walk('.'):
-            for f in files:
-                if f.endswith('.kt'):
-                    path = os.path.join(root, f)
-                    with open(path, 'r', encoding='utf-8', errors='ignore') as fp:
-                        text = fp.read()
-                    if 'CloudNestMark' in text or 'onOpenCloud' in text or 'AuthScreen' in text:
-                        print('FOUND IN:', path)
+print("=== EXAMINING KOTLIN FILES ===")
+for root, dirs, files in os.walk("."):
+    for f in files:
+        if f.endswith(".kt"):
+            path = os.path.join(root, f)
+            with open(path, "r", encoding="utf-8", errors="ignore") as fp:
+                text = fp.read()
+            if "CloudNestMark" in text or "onOpenCloud" in text or "AuthScreen" in text:
+                print("FOUND IN:", path)
 
-        # Patch AuthScreen.kt
-        for p in glob.glob('**/AuthScreen.kt', recursive=True):
-            print('Patching', p)
-            with open(p, 'r') as fp:
-                content = fp.read()
-            
-            # Add onOpenCloud parameter to AuthScreen if missing
-            if 'onOpenCloud' not in content and 'fun AuthScreen' in content:
-                content = re.sub(r'fun\s+AuthScreen\s*\(([^)]*)', r'fun AuthScreen(\1, onOpenCloud: () -> Unit = {}', content)
-                content = content.replace('(, ', '(')
-            
-            # Add CloudNestMark dummy composable if CloudNestMark is referenced but not defined
-            if 'CloudNestMark' in content and 'fun CloudNestMark' not in content:
-                content += '''
+# Patch AuthScreen.kt
+for p in glob.glob("**/AuthScreen.kt", recursive=True):
+    print("Patching AuthScreen:", p)
+    with open(p, "r") as fp:
+        content = fp.read()
+    
+    # Add onOpenCloud parameter to AuthScreen if missing
+    if "onOpenCloud" not in content and "fun AuthScreen" in content:
+        content = re.sub(r"(fun\s+AuthScreen\s*\([^)]*)", r"\1, onOpenCloud: () -> Unit = {}", content)
+        content = content.replace("(, ", "(")
+    
+    # Add CloudNestMark dummy composable if CloudNestMark is referenced but not defined
+    if "CloudNestMark" in content and "fun CloudNestMark" not in content:
+        content += "\n\n@androidx.compose.runtime.Composable\nfun CloudNestMark(modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier) {\n    androidx.compose.foundation.layout.Spacer(modifier = modifier)\n}\n"
+    
+    with open(p, "w") as fp:
+        fp.write(content)
 
-@androidx.compose.runtime.Composable
-fun CloudNestMark(modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier) {
-    androidx.compose.foundation.layout.Spacer(modifier = modifier)
-}
-'''
-            with open(p, 'w') as fp:
-                fp.write(content)
-
-        # Patch AppNavHost.kt
-        for p in glob.glob('**/AppNavHost.kt', recursive=True):
-            print('Patching', p)
-            with open(p, 'r') as fp:
-                content = fp.read()
-            
-            # Give default value to onOpenCloud parameter in AppNavHost if present
-            content = re.sub(r'onOpenCloud\s*:\s*\(\s*\)\s*->\s*Unit(?!\s*=)', r'onOpenCloud: () -> Unit = {}', content)
-            
-            # If onOpenCloud parameter call is invalid, remove onOpenCloud argument lines or fix them
-            lines = content.splitlines()
-            new_lines = []
-            for line in lines:
-                new_lines.append(line)
-            content = '\n'.join(new_lines)
-            
-            with open(p, 'w') as fp:
-                fp.write(content)
-        "
+# Patch AppNavHost.kt
+for p in glob.glob("**/AppNavHost.kt", recursive=True):
+    print("Patching AppNavHost:", p)
+    with open(p, "r") as fp:
+        content = fp.read()
+    
+    # Give default value to onOpenCloud parameter in AppNavHost if present
+    content = re.sub(r"onOpenCloud\s*:\s*\(\s*\)\s*->\s*Unit(?!\s*=)", r"onOpenCloud: () -> Unit = {}", content)
+    
+    with open(p, "w") as fp:
+        fp.write(content)
+EOF
+        python3 patch.py
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
