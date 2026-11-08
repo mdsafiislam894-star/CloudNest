@@ -1,0 +1,47 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract source zip
+        run: |
+          unzip -o CloudNest-source.zip || unzip -o *.zip
+          if [ -d "CloudNest" ]; then
+            cp -rf CloudNest/* .
+            cp -rf CloudNest/.[!.]* . || true
+          fi
+          chmod +x gradlew
+
+      - name: Patch Kotlin source code errors
+        run: |
+          rm -f ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/components/CloudNestMark.kt
+          sed -i '/CloudNestMark/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/auth/AuthScreen.kt || true
+          sed -i '/onOpenCloud/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt || true
+          sed -i 's/onLoggedOut = {/onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }, onLoggedOut = {/' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt || true
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Android APK
+        run: ./gradlew :android:assembleDebug -PsplitAbis=false --no-daemon --stacktrace
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CloudNest-APK
+          path: android/build/outputs/apk/debug/*.apk
