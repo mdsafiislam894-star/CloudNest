@@ -1,6 +1,79 @@
 name: Build Android APK
 
+on:name: Build Android APK
+
 on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract source zip
+        run: |
+          unzip -o CloudNest-source.zip || unzip -o *.zip
+          if [ -d "CloudNest" ]; then
+            cp -rf CloudNest/* .
+            cp -rf CloudNest/.[!.]* . || true
+          fi
+          chmod +x gradlew
+
+      - name: Patch Kotlin source code errors
+        run: |
+          python3 -c "
+          import os, re
+
+          # Remove CloudNestMark from all kt files
+          for root, dirs, files in os.walk('.'):
+              for file in files:
+                  if file.endswith('.kt'):
+                      path = os.path.join(root, file)
+                      content = open(path).read()
+                      if 'CloudNestMark' in content:
+                          print(f'Removing CloudNestMark from {path}')
+                          content = re.sub(r'.*CloudNestMark.*\n?', '', content)
+                          open(path, 'w').write(content)
+
+          # Inspect and fix FilesScreen.kt
+          fs_path = 'ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt'
+          if os.path.exists(fs_path):
+              lines = open(fs_path).readlines()
+              print('--- FilesScreen.kt lines 605-630 ---')
+              for i in range(max(0, 604), min(len(lines), 630)):
+                  print(f'{i+1}: {lines[i]}', end='')
+              
+              content = open(fs_path).read()
+              content = re.sub(r'onOpenCloud\s*:\s*@Composable\s*\(\)\s*->\s*Unit', 'onOpenCloud: () -> Unit', content)
+              open(fs_path, 'w').write(content)
+          "
+          rm -f ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/components/CloudNestMark.kt
+          sed -i '/CloudNestMark/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/auth/AuthScreen.kt
+          sed -i '/onOpenCloud/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavigation.kt
+          sed -i 's/onLoggedOut = {/onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }, onLoggedOut = {/g' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavigation.kt
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Android APK
+        run: ./gradlew :android:assembleDebug -PsplitAbis=false --no-daemon --stacktrace
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CloudNest-APK
+          path: android/build/outputs/apk/debug/*.apk
+
   push:
     branches: [ master, main ]
   workflow_dispatch:
