@@ -1,6 +1,6 @@
 name: Build Android APK
 
-on:name: Build Android APK
+on:on:name: Build Android APK
 
 on:
   push:
