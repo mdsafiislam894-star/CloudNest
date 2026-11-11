@@ -26,6 +26,8 @@ jobs:
           python3 -c "
           import os, re
           print('=== PATCH START ===')
+
+          # 1. Clean CloudNestMark references & files
           for root, dirs, files in os.walk('.'):
               for file in files:
                   if file.endswith('.kt'):
@@ -39,33 +41,44 @@ jobs:
                               with open(p, 'w', encoding='utf-8') as f:
                                   f.write(c)
                       except Exception as e: pass
+
           for root, dirs, files in os.walk('.'):
               for file in files:
                   if 'CloudNestMark' in file:
                       p = os.path.join(root, file)
                       try: os.remove(p)
                       except: pass
+
+          # 2. Fix AppNavHost.kt
           for root, dirs, files in os.walk('.'):
               for file in files:
                   if file == 'AppNavHost.kt':
                       p = os.path.join(root, file)
                       try:
                           with open(p, 'r', encoding='utf-8') as f: c = f.read()
-                          c = re.sub(r'onOpenCloud\s*=\s*\{[^}]*\}', 'onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }', c)
+                          c = re.sub(r'onOpenCloud\s*=\s*\{[^\n}]*\}\s*,?', '', c)
+                          c = re.sub(r'(FilesScreen\s*\([^)]*)\)', r'\1, onOpenCloud = { navController.navigateOnce(Route.CloudAccount) })', c)
                           with open(p, 'w', encoding='utf-8') as f: f.write(c)
-                      except Exception as e: pass
+                          print(f'Patched {p}')
+                      except Exception as e: print(e)
+
+          # 3. Fix FilesScreen.kt
           for root, dirs, files in os.walk('.'):
               for file in files:
                   if file == 'FilesScreen.kt':
                       p = os.path.join(root, file)
-                      print(f'Found FilesScreen.kt at {p}')
-                      lines = open(p, 'r', encoding='utf-8').readlines()
-                      print(f'Total lines: {len(lines)}')
-                      start = max(0, 595)
-                      end = min(len(lines), 645)
-                      print(f'--- {p} lines {start+1} to {end} ---')
-                      for i in range(start, end):
-                          print(f'{i+1}: {lines[i]}', end='')
+                      try:
+                          with open(p, 'r', encoding='utf-8') as f: c = f.read()
+                          c = re.sub(r'containerColor\s*=\s*\{\s*progress\s*->\s*androidx\.compose\.ui\.graphics\.lerp\(\s*MaterialTheme\.colorScheme\.primary\s*,\s*MaterialTheme\.colorScheme\.secondary\s*,\s*progress\s*\)\s*\}', '''containerColor = run {
+                    val pCol = MaterialTheme.colorScheme.primary
+                    val sCol = MaterialTheme.colorScheme.secondary
+                    { progress: Float ->
+                        androidx.compose.ui.graphics.lerp(pCol, sCol, progress)
+                    }
+                }''', c)
+                          with open(p, 'w', encoding='utf-8') as f: f.write(c)
+                          print(f'Patched {p}')
+                      except Exception as e: print(e)
           "
 
       - name: Set up JDK 21
