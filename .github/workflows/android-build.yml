@@ -1,7 +1,5 @@
 name: Build Android APK
 
-on:on:name: Build Android APK
-
 on:
   push:
     branches: [ master, main ]
@@ -14,9 +12,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract source zip
+      - name: Unzip repository archive if available
         run: |
-          unzip -o CloudNest-source.zip || unzip -o *.zip
+          unzip -o CloudNest-source.zip || unzip -o *.zip || true
           if [ -d "CloudNest" ]; then
             cp -rf CloudNest/* .
             cp -rf CloudNest/.[!.]* . || true
@@ -27,34 +25,48 @@ jobs:
         run: |
           python3 -c "
           import os, re
-
-          # Remove CloudNestMark from all kt files
+          print('=== PATCH START ===')
           for root, dirs, files in os.walk('.'):
               for file in files:
                   if file.endswith('.kt'):
-                      path = os.path.join(root, file)
-                      content = open(path).read()
-                      if 'CloudNestMark' in content:
-                          print(f'Removing CloudNestMark from {path}')
-                          content = re.sub(r'.*CloudNestMark.*\n?', '', content)
-                          open(path, 'w').write(content)
-
-          # Inspect and fix FilesScreen.kt
-          fs_path = 'ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt'
-          if os.path.exists(fs_path):
-              lines = open(fs_path).readlines()
-              print('--- FilesScreen.kt lines 605-630 ---')
-              for i in range(max(0, 604), min(len(lines), 630)):
-                  print(f'{i+1}: {lines[i]}', end='')
-              
-              content = open(fs_path).read()
-              content = re.sub(r'onOpenCloud\s*:\s*@Composable\s*\(\)\s*->\s*Unit', 'onOpenCloud: () -> Unit', content)
-              open(fs_path, 'w').write(content)
+                      p = os.path.join(root, file)
+                      try:
+                          with open(p, 'r', encoding='utf-8') as f:
+                              c = f.read()
+                          if 'CloudNestMark' in c:
+                              print(f'Removing CloudNestMark from {p}')
+                              c = re.sub(r'.*CloudNestMark.*\n?', '', c)
+                              with open(p, 'w', encoding='utf-8') as f:
+                                  f.write(c)
+                      except Exception as e: pass
+          for root, dirs, files in os.walk('.'):
+              for file in files:
+                  if 'CloudNestMark' in file:
+                      p = os.path.join(root, file)
+                      try: os.remove(p)
+                      except: pass
+          for root, dirs, files in os.walk('.'):
+              for file in files:
+                  if file == 'AppNavHost.kt':
+                      p = os.path.join(root, file)
+                      try:
+                          with open(p, 'r', encoding='utf-8') as f: c = f.read()
+                          c = re.sub(r'onOpenCloud\s*=\s*\{[^}]*\}', 'onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }', c)
+                          with open(p, 'w', encoding='utf-8') as f: f.write(c)
+                      except Exception as e: pass
+          for root, dirs, files in os.walk('.'):
+              for file in files:
+                  if file == 'FilesScreen.kt':
+                      p = os.path.join(root, file)
+                      print(f'Found FilesScreen.kt at {p}')
+                      lines = open(p, 'r', encoding='utf-8').readlines()
+                      print(f'Total lines: {len(lines)}')
+                      start = max(0, 595)
+                      end = min(len(lines), 645)
+                      print(f'--- {p} lines {start+1} to {end} ---')
+                      for i in range(start, end):
+                          print(f'{i+1}: {lines[i]}', end='')
           "
-          rm -f ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/components/CloudNestMark.kt
-          sed -i '/CloudNestMark/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/auth/AuthScreen.kt
-          sed -i '/onOpenCloud/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavigation.kt
-          sed -i 's/onLoggedOut = {/onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }, onLoggedOut = {/g' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavigation.kt
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -64,51 +76,6 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-
-      - name: Build Android APK
-        run: ./gradlew :android:assembleDebug -PsplitAbis=false --no-daemon --stacktrace
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: CloudNest-APK
-          path: android/build/outputs/apk/debug/*.apk
-
-  push:
-    branches: [ master, main ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Extract source zip
-        run: |
-          unzip -o CloudNest-source.zip || unzip -o *.zip
-          if [ -d "CloudNest" ]; then
-            cp -rf CloudNest/* .
-            cp -rf CloudNest/.[!.]* . || true
-          fi
-          chmod +x gradlew
-
-      - name: Patch Kotlin source code errors
-        run: |
-          rm -f ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/components/CloudNestMark.kt
-          sed -i '/CloudNestMark/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/auth/AuthScreen.kt || true
-          sed -i '/onOpenCloud/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt || true
-          sed -i 's/onLoggedOut = {/onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }, onLoggedOut = {/' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt || true
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
 
       - name: Build Android APK
         run: ./gradlew :android:assembleDebug -PsplitAbis=false --no-daemon --stacktrace
