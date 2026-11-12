@@ -26,7 +26,7 @@ jobs:
           sed -i '/CloudNestMark/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/auth/AuthScreen.kt
           sed -i '/onOpenCloud/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt
           sed -i 's/onLoggedOut = {/onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }, onLoggedOut = {/' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt
-          python3 -c 'import re; p="ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt"; s=open(p).read(); s=re.sub(r"ToggleFloatingActionButton\s*\(.*?Icon\s*\(", "ToggleFloatingActionButton(checked = showAddMenu, onCheckedChange = { showAddMenu = it }) {\n                                    Icon(", s, count=1, flags=re.DOTALL); open(p,"w").write(s)'
+          python3 -c 'import re,os; p="ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt"; s=open(p).read(); s=re.sub(r"ToggleFloatingActionButton\s*\(.*?Icon\s*\(", "ToggleFloatingActionButton(checked = showAddMenu, onCheckedChange = { showAddMenu = it }) {\n                                    Icon(", s, count=1, flags=re.DOTALL); open(p,"w").write(s); c="ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/theme/NexVaultColors.kt"; s2=open(c).read().replace("Color(0xFF101B35)","Color(0xFF0B0A1F)").replace("Color(0xFF080F20)","Color(0xFF060515)"); open(c,"w").write(s2)'
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
