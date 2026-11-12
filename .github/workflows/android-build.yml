@@ -29,7 +29,7 @@ jobs:
           sed -i '/onOpenCloud/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt
           sed -i 's/onLoggedOut = {/onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }, onLoggedOut = {/' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt
           sed -n '610,635p' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt || true
-          sed -i 's/containerColor = .*/ /g' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt || true
+          sed -i 's/containerColor = .*/ /          python3 -c "import re; p='ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt'; s=open(p).read(); s=re.sub(r'ToggleFloatingActionButton\s*\([^\{]*\{', 'ToggleFloatingActionButton(checked = showAddMenu, onCheckedChange = { showAddMenu = it }) {', s, flags=re.DOTALL); open(p,'w').write(s)"g' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt || true
           sed -i '/containerColor/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt || true
 
       - name: Setup Java JDK 21
