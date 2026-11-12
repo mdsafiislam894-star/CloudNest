@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract and patch source
+      - name: Extract and apply UI redesign
         run: |
           unzip -o *.zip
           if [ -d "CloudNest" ]; then
@@ -22,11 +22,52 @@ jobs:
             rm -rf CloudNest
           fi
           chmod +x gradlew
-          rm -f ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/components/CloudNestMark.kt
-          sed -i '/CloudNestMark/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/auth/AuthScreen.kt
-          sed -i '/onOpenCloud/d' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt
-          sed -i 's/onLoggedOut = {/onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }, onLoggedOut = {/' ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/navigation/AppNavHost.kt
-          python3 -c 'import re,os; p="ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/files/FilesScreen.kt"; s=open(p).read(); s=re.sub(r"ToggleFloatingActionButton\s*\(.*?Icon\s*\(", "ToggleFloatingActionButton(checked = showAddMenu, onCheckedChange = { showAddMenu = it }) {\n                                    Icon(", s, count=1, flags=re.DOTALL); open(p,"w").write(s); c="ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/theme/NexVaultColors.kt"; s2=open(c).read().replace("Color(0xFF101B35)","Color(0xFF0B0A1F)").replace("Color(0xFF080F20)","Color(0xFF060515)"); open(c,"w").write(s2)'
+          cat << 'EOF' > patch.py
+          import os, re
+          B = "ui/src/jvmCommonMain/kotlin/com/safiislam/nexvault/presentation/"
+          rd = lambda p: open(p).read()
+          wr = lambda p, s: open(p, "w").write(s)
+          os.path.exists(B+"components/CloudNestMark.kt") and os.remove(B+"components/CloudNestMark.kt")
+          wr(B+"auth/AuthScreen.kt", "\n".join(l for l in rd(B+"auth/AuthScreen.kt").splitlines() if "CloudNestMark" not in l)+"\n")
+          nav = "\n".join(l for l in rd(B+"navigation/AppNavHost.kt").splitlines() if "onOpenCloud" not in l)
+          wr(B+"navigation/AppNavHost.kt", nav.replace("onLoggedOut = {", "onOpenCloud = { navController.navigateOnce(Route.CloudAccount) }, onLoggedOut = {")+"\n")
+          wr(B+"NexVaultApp.kt", rd(B+"NexVaultApp.kt").replace("AppTheme.SYSTEM -> systemDarkTheme()", "AppTheme.SYSTEM -> false"))
+          wr(B+"theme/Theme.kt", rd(B+"theme/Theme.kt").replace("platformColorScheme(darkTheme, dynamicColor)", "(null as androidx.compose.material3.ColorScheme?)"))
+          [wr(pf, rd(pf).replace("AppTheme.SYSTEM", "AppTheme.LIGHT").replace("val gridSize: Int = 3", "val gridSize: Int = 2")) for pf in ["shared/src/commonMain/kotlin/com/safiislam/nexvault/domain/model/UserPreferences.kt", B+"AppUiState.kt", B+"files/FilesUiState.kt"] if os.path.exists(pf)]
+          cs = rd(B+"theme/NexVaultColors.kt")
+          cs = cs.replace("0xFF5B3FE0","0xFF7151F5").replace("0xFFEBE2FF","0xFF6B4CF6").replace("onPrimaryContainer = Color(0xFF22005E)","onPrimaryContainer = Color.White").replace("0xFFCFF5FF","0xFF5434D6").replace("0xFFF7F6FF","0xFFF4F3FB").replace("0xFFF1EFFB","0xFFFFFFFF")
+          wr(B+"theme/NexVaultColors.kt", cs)
+          sp = rd(B+"components/BrandSplash.kt").replace("listOf(Color(0xFF02080D), NexVaultPalette.Navy900, Color(0xFF1B1446))", "listOf(Color(0xFF8B6BFF), Color(0xFF6B4CF6), Color(0xFF4B2FC9))").replace('text = "CloudNest"', 'text = "New level in\\nmanaging your\\nstorage"')
+          wr(B+"components/BrandSplash.kt", sp)
+          rn = rd(B+"components/RenameDialog.kt").replace("AlertDialog(", "AlertDialog(containerColor = androidx.compose.ui.graphics.Color(0xFF6B4CF6), titleContentColor = androidx.compose.ui.graphics.Color.White, textContentColor = androidx.compose.ui.graphics.Color.White,")
+          wr(B+"components/RenameDialog.kt", rn)
+          a1 = 'package com.safiislam.nexvault.presentation.components\nimport androidx.compose.foundation.background\nimport androidx.compose.foundation.border\nimport androidx.compose.foundation.layout.*\nimport androidx.compose.foundation.shape.RoundedCornerShape\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.automirrored.filled.*\nimport androidx.compose.material.icons.filled.DeleteOutline\nimport androidx.compose.material3.*\nimport androidx.compose.runtime.*\nimport androidx.compose.ui.Modifier\nimport androidx.compose.ui.graphics.Color\nimport androidx.compose.ui.unit.*\nimport kotlinx.coroutines.delay\nimport kotlin.time.Duration.Companion.milliseconds'
+          a2 = '@Composable fun ActionMenu(expanded: Boolean, onDismissRequest: () -> Unit, actions: List<MenuAction>, modifier: Modifier = Modifier) { val stack = remember { mutableStateListOf<MenuAction>() }; LaunchedEffect(expanded) { if (!expanded) { delay(200L.milliseconds); stack.clear() } }; val parent = stack.lastOrNull(); val shape = RoundedCornerShape(22.dp)'
+          a3 = 'DropdownMenu(expanded = expanded, onDismissRequest = onDismissRequest, offset = DpOffset((-8).dp, 4.dp), shape = shape, containerColor = Color(0xFF1E1F26), modifier = modifier.widthIn(min = 240.dp).border(1.dp, Color.White.copy(alpha = 0.1f), shape).background(Color(0xFF1E1F26), shape)) {'
+          a4 = 'if (parent != null) { DropdownMenuItem(text = { Text(parent.label, color = Color(0xFF9CA3AF)) }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp)) }, onClick = { stack.removeAt(stack.lastIndex) }); HorizontalDivider(color = Color.White.copy(alpha = 0.08f)) }'
+          a5 = 'val items = parent?.children ?: actions; items.forEachIndexed { idx, action -> val isDel = action.icon == Icons.Filled.DeleteOutline || action.label.contains("trash", true) || action.label.contains("delete", true); val tint = if (isDel) Color(0xFFFF453A) else Color.White; DropdownMenuItem(text = { Text(action.label, color = tint, fontSize = 15.sp) }, trailingIcon = { if (action.children.isNotEmpty()) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = tint, modifier = Modifier.size(20.dp)) else action.icon?.let { Icon(it, null, tint = tint, modifier = Modifier.size(20.dp)) } }, onClick = { if (action.children.isEmpty()) { action.onClick(); onDismissRequest() } else stack.add(action) }); if (idx < items.lastIndex) HorizontalDivider(color = Color.White.copy(alpha = 0.08f)) } } }'
+          wr(B+"components/ActionMenu.kt", "\n".join([a1,a2,a3,a4,a5])+"\n")
+          fs = rd(B+"files/FilesScreen.kt")
+          fs = re.sub(r"ToggleFloatingActionButton\s*\(.*?Icon\s*\(", "ToggleFloatingActionButton(checked = showAddMenu, onCheckedChange = { showAddMenu = it }) {\n                                    Icon(", fs, count=1, flags=re.DOTALL)
+          fs = fs.replace("title = stringResource(Res.string.files_new_folder),", 'title = "Create Smart Folder",')
+          wr(B+"files/FilesScreen.kt", fs)
+          hm = rd(B+"home/HomeScreen.kt").replace("title = { Text(stringResource(Res.string.app_name)) },", 'title = { Text("My Storage", fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold) },')
+          c1 = 'item { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {'
+          c2 = 'Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {'
+          c3 = 'listOf(Triple("Videos", "51%", androidx.compose.ui.graphics.Color(0xFFF4A24C)), Triple("Music", "26%", androidx.compose.ui.graphics.Color(0xFFEC48D9)), Triple("Apps", "23%", androidx.compose.ui.graphics.Color(0xFF35D3C8))).forEach { (lbl, pct, col) ->'
+          c4 = 'Column(modifier = Modifier.weight(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp)).background(col).clickable { onOpenCollection(CollectionType.FAVORITES) }.padding(vertical = 18.dp, horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {'
+          c5 = 'Box(modifier = Modifier.size(36.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.24f)), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Folder, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(18.dp)) }'
+          c6 = 'Spacer(Modifier.height(10.dp)); Text(lbl, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f), style = MaterialTheme.typography.labelLarge); Spacer(Modifier.height(4.dp)); Text(pct, color = androidx.compose.ui.graphics.Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold) } } }'
+          c7 = 'Row(modifier = Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(26.dp)).background(androidx.compose.ui.graphics.Color.White).padding(4.dp)) {'
+          c8 = 'Box(modifier = Modifier.weight(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp)).background(androidx.compose.ui.graphics.Color(0xFF7151F5)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text("Storage", color = androidx.compose.ui.graphics.Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }'
+          c9 = 'Box(modifier = Modifier.weight(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp)).clickable { onOpenChannels() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text("Clouds", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) } }'
+          c10 = 'Card(modifier = Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)) { Column(modifier = Modifier.padding(16.dp)) { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Used " + Formatters.bytes(state.storage.sumOf { it.totalBytes }), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${state.totalFiles} files used", style = MaterialTheme.typography.bodySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }; Spacer(Modifier.height(10.dp)); Box(modifier = Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Brush.horizontalGradient(listOf(androidx.compose.ui.graphics.Color(0xFF7151F5), androidx.compose.ui.graphics.Color(0xFFF4A24C), androidx.compose.ui.graphics.Color(0xFFEC48D9), androidx.compose.ui.graphics.Color(0xFF35D3C8))))) } } } }'
+          cat_ui = "\n".join([c1,c2,c3,c4,c5,c6,c7,c8,c9,c10])
+          hm = hm.replace("if (state.favoriteFolders.isNotEmpty()) {", cat_ui + "\n            if (state.favoriteFolders.isNotEmpty()) {")
+          hm = re.sub(r"private fun CollectionRow\(.*?tint = MaterialTheme\.colorScheme\.primary\s*\)", 'private fun CollectionRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) { Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp)).background(androidx.compose.ui.graphics.Color.White).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) { Box(modifier = Modifier.size(44.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).background(androidx.compose.ui.graphics.Color(0xFF7151F5)), contentAlignment = Alignment.Center) { Icon(imageVector = icon, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White) }', hm, count=1, flags=re.DOTALL)
+          wr(B+"home/HomeScreen.kt", hm)
+          EOF
+          python3 -c "exec('\n'.join(l.lstrip() for l in open('patch.py') if l.strip()))"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
