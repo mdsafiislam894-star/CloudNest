@@ -13,7 +13,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Extract Source Zip and Apply Full UI Redesign
+      - name: Extract Source Zip and Apply Full UI & IDM Multi-Thread Upgrade 
         run: |
           unzip -q -o *.zip
           if [ -d "CloudNest" ]; then cp -rf CloudNest/* . && (cp -rf CloudNest/.[!.]* . || true) && rm -rf CloudNest; fi
